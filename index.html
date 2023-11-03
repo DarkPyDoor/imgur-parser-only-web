@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Downloader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.5.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.2/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #control-panel {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #image-panel {
+            flex: 2;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #download, #downloadall {
+            padding: 10px 20px;
+            font-size: 18px;
+            color: white;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        #status {
+            font-size: 16px;
+        }
+
+        #images {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+
+        .image {
+            margin: 10px;
+        }
+        .image img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="control-panel">
+        <button id="download">Start Parsing</button>
+        <button id="downloadall">Download ALL</button>
+        <div id="status"></div>
+    </div>
+    <div id="image-panel">
+        <div id="images"></div>
+    </div>
+    <script>
+        var start = Date.now();
+        var attemptCount = 0;
+        var successCount = 0;
+        var intervalId = null;
+
+        function generateImgurLink() {
+            var randomString = '';
+            var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            for (var i = 0; i < 7; i++) {
+                randomString += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return 'https://i.imgur.com/' + randomString + '.jpg';
+        }
+
+        function downloadImg(url) {
+            fetch(url)
+                .then(function(response) {
+                    if (!response.ok || response.url == 'https://i.imgur.com/removed.png') {
+                        throw new Error('HTTP error, status = ' + response.status);
+                    }
+                    return response.blob();
+                })
+                .then(function(blob) {
+                    var objectURL = URL.createObjectURL(blob);
+                    var img = document.createElement('img');
+                    img.src = objectURL;
+                    img.height = 100;
+                    var div = document.createElement('div');
+                    div.className = 'image';
+                    div.appendChild(img);
+                    document.getElementById('images').appendChild(div);
+                    successCount++;
+                })
+                .catch(function(error) {
+                    console.log(error);
+                })
+                .finally(function() {
+                    attemptCount++;
+                    var elapsed = (Date.now() - start) / 1000;
+                    document.getElementById('status').textContent = 
+                        'Сгенерировано ссылок: ' + attemptCount + '\n' +
+                        'Успешных загрузок: ' + successCount + '\n' +
+                        'Общее время генерации ссылок: ' + elapsed + ' секунд';
+                });
+        }
+
+        document.getElementById('download').addEventListener('click', function() {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+                this.textContent = 'Start Parsing';
+            } else {
+                intervalId = setInterval(function() {
+                    downloadImg(generateImgurLink());
+                }, 1);
+                this.textContent = 'Stop Parsing';
+            }
+        });
+        document.getElementById('downloadall').addEventListener('click', function() {
+            var jszip = new JSZip();
+            var downloadFolder = jszip.folder("images");
+            var imgElements = document.getElementsByTagName('img');
+            var imgCount = imgElements.length;
+            var loadedCount = 0;
+
+            for(let i = 0; i < imgCount; i++) {
+                let imgUrl = imgElements[i].src;
+                let filename = imgUrl.substring(imgUrl.lastIndexOf('/')+1);
+
+                fetch(imgUrl)
+                    .then(response => response.blob())
+                    .then(blob => {
+                        downloadFolder.file(filename, blob, {binary:true});
+                        loadedCount++;
+                        if(loadedCount == imgCount) {
+                            jszip.generateAsync({type:"blob"})
+                                .then(content => {
+                                    saveAs(content, "images.zip");
+                                });
+                        }
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
